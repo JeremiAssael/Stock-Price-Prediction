@@ -1,0 +1,174 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+. 
+
+```{r}
+df_prices <- read.csv2("C:/Users/cypri/Documents/3A CS/data_MS.csv",dec=";",header=T,stringsAsFactors = FALSE)
+
+```
+
+```{r}
+df_prices$MSFT = as.numeric(df_prices$MSFT)
+df_prices$AAPL = as.numeric(df_prices$AAPL)
+df_prices$GOOGL = as.numeric(df_prices$GOOGL)
+df_prices$DAL = as.numeric(df_prices$DAL)
+df_prices$XOM = as.numeric(df_prices$XOM)
+df_prices$X = as.Date(df_prices$X)
+
+```
+
+```{r}
+df_prices
+```
+
+```{r}
+p1 <- ggplot(data=df_prices)+
+  geom_line(aes(x = X,y = AAPL)) 
+p1
+```
+```{r}
+#A = lapply(as.numeric(df_prices$AAPL),log56)
+#df_prices$logAAPL = A
+returnAP = diff(log(df_prices$AAPL))
+df_prices$APr = c(0,returnAP)
+
+#B = diff(df_prices$logAAPL)
+```
+
+```{r}
+df_prices$APr2 = df_prices$APr^2
+```
+
+
+
+```{r}
+acf_APr <- acf(df_prices$APr, main="Autocorrélation des Rendements")
+pacf_APr <- pacf(df_prices$APr, main="Autocorrélation partielle des Rendements")
+acf_APr
+pacf_APr
+```
+
+```{r}
+acf_APr2 <- acf(df_prices$APr2, main="Autocorrélation des Rendements au carré (volatilité)")
+pacf_APr2 <- pacf(df_prices$APr2, main="AutocorrÃ©lation partielle des Rendements au carré (volatilité)")
+acf_APr2
+pacf_APr2
+```
+
+```{r}
+library(tseries)
+library(forecast)
+arma_autoarima <- auto.arima(df_prices$APr, max.p = 25,max.q = 25, d=0)
+arma_autoarima
+```
+```{r}
+max_p <- 20
+max_q <- 20
+aic <- matrix(0, nrow = (max_p+1), ncol = (max_q+1))
+for (p in 0:max_p){
+  for (q in 0:max_q){
+    try({model <- arima(df_prices$APr, order = c(p, 0, q)) ;aic[p+1,q+1] <- model$aic },TRUE)
+  } 
+}
+ordre <- as.vector(which(aic == min(aic), arr.ind = TRUE))-1
+```
+```{r}
+period <- 20
+prediction_h3 <- predict(arma_autoarima,period, conf.type="mean")
+low <- as.vector(prediction_h3$pred-qnorm(0.95)*prediction_h3$se)
+up <- as.vector(prediction_h3$pred+qnorm(0.95)*prediction_h3$se)
+```
+```{r}
+prediction <- data.frame(as.numeric(prediction_h3$pred),low,up)
+colnames(prediction)=c("pred","low","up")
+```{r}
+
+```
+
+p4 <- ggplot(data=prediction)+
+  geom_line(aes(x=1:period,y=pred))+
+  xlab("Prediction")+
+  ylab("Return")+
+  ggtitle("Prédiction sur les 20 prochains jours du retour")
+p4
+```
+
+```{r}
+p5 <- ggplot(data=prediction)+
+  geom_line(aes(x=1:period,y=pred))+
+  geom_line(aes(x=1:period,y=up),col="red")+
+  geom_line(aes(x=1:period,y=low),col="red")+
+  xlab("Mois prÃ©dits")+
+  ylab("Earning Yield")+
+  ggtitle("Prédiction et intervalle de confiance sur les 36 prochains mois de l'Earning Yield")
+p5
+```
+```{r}
+library(Metrics)
+df_prices$autoarima <- df_prices$APr - arma_autoarima$residuals
+
+
+
+p6 <- ggplot()+
+  geom_line(aes(x=df_prices$X,y=df_prices$APr),size=0.3)+
+  geom_line(aes(x=df_prices$X,y=df_prices$autoarima), col="blue",size=0.3)+
+  xlab("Temps")+
+  ylab("Return")+
+  ggtitle("Superposition des modÃ¨les sur les donnÃ©es historiques")
+p6
+```
+
+
+```{r}
+#mae_autocor <- mae(SP500$ey,arma_autocor$fitted)
+mae_autoarima <- mae(SP500$ey,arma_autoarima$fitted)
+#rmse_autocor <- rmse(SP500$ey,arma_autocor$fitted)
+rmse_autoarima <- rmse(SP500$ey,arma_autoarima$fitted)
+
+#print(paste("MAE pour le modÃ¨le ARMA(1,20)"))
+#print(mae_autocor)
+print(paste("MAE pour le modÃ¨le ARMA(2,2)"))
+print(mae_autoarima)
+#print(paste("RMSE pour le modÃ¨le ARMA(1,20)"))
+#print(rmse_autocor)
+print(paste("RMSE pour le modÃ¨le ARMA(2,2)"))
+print(rmse_autoarima)
+```
+
+```{r}
+#install.packages("TSA")
+library(TSA)
+periodogram(df_prices$APr,log='no')
+```
+
+```{r}
+#install.packages("rugarch")
+#require(rugarch)
+```
+```{r}
+spec <- ugarchspec(variance.model = list(model = "sGARCH", 
+                                         garchOrder = c(1, 1), 
+                                         submodel = NULL, 
+                                         external.regressors = NULL, 
+                                         variance.targeting = FALSE), 
+
+                   mean.model     = list(armaOrder = c(1, 1), 
+                                         external.regressors = NULL))
+
+garch <- ugarchfit(spec = spec, data = df_prices$APr , solver.control = list(trace=0))
+```
+
+```{r}
+garch@fit$coef
+```
+
+
+
+```{r}
+
+```
+
+
